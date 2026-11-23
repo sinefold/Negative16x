@@ -3,67 +3,74 @@
 #include <string.h>
 #include <stdio.h>
 
-#define DELAY_MIN_MS   (-500.0f)
-#define DELAY_MAX_MS   100.0f
-#define BASELINE_MS    500.0f
+#define NPAIRS       16
+#define NCH          (NPAIRS * 2)
+#define DELAY_MIN_MS (-500.0f)
+#define DELAY_MAX_MS 100.0f
+#define BASELINE_MS  500.0f
 
 typedef struct {
     audioMasterCallback host;
     float sampleRate;
     int   blockSize;
-    float param;
-    int   delaySamples;
-    float *buf[2];
+    float param[NPAIRS];
+    int   valueSamples[NPAIRS];
+    int   baseline;
+    int   delaySamples[NPAIRS];
+    float *buf[NCH];
     int   bufCap;
     int   wPos;
 } Plug;
 
-static int calcDelay(const Plug *p) {
-    float ms = BASELINE_MS + DELAY_MIN_MS + p->param * (DELAY_MAX_MS - DELAY_MIN_MS);
-    int d = (int)(ms * p->sampleRate * 0.001f + 0.5f);
-    return d > 0 ? d : 0;
+static float pairMs(const Plug *p, int i) {
+    return DELAY_MIN_MS + p->param[i] * (DELAY_MAX_MS - DELAY_MIN_MS);
 }
 
-static int baselineSamples(const Plug *p) {
-    return (int)(BASELINE_MS * p->sampleRate * 0.001f + 0.5f);
+static void recompute(Plug *p) {
+    int B = 0;
+    for (int i = 0; i < NPAIRS; i++) {
+        float ms = pairMs(p, i);
+        int v = (int)(ms * p->sampleRate * 0.001f + (ms >= 0 ? 0.5f : -0.5f));
+        p->valueSamples[i] = v;
+        if (-v > B) B = -v;
+    }
+    p->baseline = B;
+    for (int i = 0; i < NPAIRS; i++) {
+        int d = B + p->valueSamples[i];
+        p->delaySamples[i] = d > 0 ? d : 0;
+    }
 }
 
 static void freeBuf(Plug *p) {
-    free(p->buf[0]); free(p->buf[1]);
-    p->buf[0] = p->buf[1] = NULL;
+    for (int c = 0; c < NCH; c++) { free(p->buf[c]); p->buf[c] = NULL; }
     p->bufCap = p->wPos = 0;
 }
 
 static int ensureBuf(Plug *p) {
-    int maxPos = (int)((BASELINE_MS + DELAY_MAX_MS) * p->sampleRate * 0.001f) + 1;
-    int need = maxPos + p->blockSize;
+    int need = (int)((BASELINE_MS + DELAY_MAX_MS) * p->sampleRate * 0.001f) + 1 + p->blockSize;
     if (p->bufCap >= need && p->buf[0]) return 1;
-    float *l = (float *)realloc(p->buf[0], (size_t)need * sizeof(float));
-    float *r = (float *)realloc(p->buf[1], (size_t)need * sizeof(float));
-    if (!l || !r) {
-        if (l && !r) { free(l); l = NULL; }
-        if (r && !l) { free(r); r = NULL; }
-        if (l) { p->buf[0] = l; }
-        if (r) { p->buf[1] = r; }
-        if (!l || !r) { freeBuf(p); return 0; }
+    int ok = 1;
+    for (int c = 0; c < NCH; c++) {
+        float *nb = (float *)realloc(p->buf[c], (size_t)need * sizeof(float));
+        if (!nb) { ok = 0; break; }
+        p->buf[c] = nb;
     }
-    p->buf[0] = l; p->buf[1] = r;
+    if (!ok) { freeBuf(p); return 0; }
     p->bufCap = need;
     return 1;
 }
 
 static void process(Plug *p, float **in, float **out, VstInt32 n) {
-    int d = p->delaySamples;
-    if (d <= 0 || !p->buf[0]) {
-        if (out[0] != in[0]) memcpy(out[0], in[0], (size_t)n * sizeof(float));
-        if (out[1] != in[1]) memcpy(out[1], in[1], (size_t)n * sizeof(float));
-        return;
-    }
-    if (d > p->bufCap - (int)n) d = p->bufCap - (int)n;
-    if (d < 0) d = 0;
-    for (int c = 0; c < 2; c++) {
+    int cap = p->bufCap;
+    for (int c = 0; c < NCH; c++) {
+        int d = p->delaySamples[c >> 1];
+        if (d <= 0 || !p->buf[0]) {
+            if (out[c] != in[c]) memcpy(out[c], in[c], (size_t)n * sizeof(float));
+            continue;
+        }
+        if (d > cap - (int)n) d = cap - (int)n;
+        if (d < 0) d = 0;
         float *b = p->buf[c];
-        int cap = p->bufCap;
         int w = p->wPos;
         int i = 0;
         while (i < n) {
@@ -88,13 +95,13 @@ static void process(Plug *p, float **in, float **out, VstInt32 n) {
 }
 
 static VstIntPtr dispatcher(AEffect *e, VstInt32 op, VstInt32 idx, VstIntPtr val, void *ptr, float opt) {
-    (void)idx;
     Plug *p = (Plug *)e->object;
     switch (op) {
     case effOpen:
         p->sampleRate = 44100.0f;
         p->blockSize = 512;
-        e->initialDelay = baselineSamples(p);
+        recompute(p);
+        e->initialDelay = p->baseline;
         return 1;
     case effClose:
         freeBuf(p);
@@ -103,8 +110,8 @@ static VstIntPtr dispatcher(AEffect *e, VstInt32 op, VstInt32 idx, VstIntPtr val
         return 1;
     case effSetSampleRate:
         p->sampleRate = opt > 0 ? opt : 44100.0f;
-        p->delaySamples = calcDelay(p);
-        e->initialDelay = baselineSamples(p);
+        recompute(p);
+        e->initialDelay = p->baseline;
         ensureBuf(p);
         return 1;
     case effSetBlockSize:
@@ -113,7 +120,8 @@ static VstIntPtr dispatcher(AEffect *e, VstInt32 op, VstInt32 idx, VstIntPtr val
         return 1;
     case effMainsChanged:
         if (val) {
-            p->delaySamples = calcDelay(p);
+            recompute(p);
+            e->initialDelay = p->baseline;
             if (!ensureBuf(p)) return 0;
         } else {
             p->wPos = 0;
@@ -123,19 +131,19 @@ static VstIntPtr dispatcher(AEffect *e, VstInt32 op, VstInt32 idx, VstIntPtr val
         if (ptr) strcpy((char *)ptr, "ms");
         return 1;
     case effGetParamDisplay:
-        if (ptr) sprintf((char *)ptr, "%.2f", DELAY_MIN_MS + p->param * (DELAY_MAX_MS - DELAY_MIN_MS));
+        if (ptr && idx >= 0 && idx < NPAIRS) sprintf((char *)ptr, "%.2f", pairMs(p, idx));
         return 1;
     case effGetParamName:
-        if (ptr) strcpy((char *)ptr, "Delay");
+        if (ptr && idx >= 0 && idx < NPAIRS) sprintf((char *)ptr, "P%d", idx + 1);
         return 1;
     case effGetEffectName:
-        if (ptr) strcpy((char *)ptr, "NegativeDelay");
+        if (ptr) strcpy((char *)ptr, "NegativeDelay16");
         return 1;
     case effGetVendorString:
         if (ptr) strcpy((char *)ptr, "paul");
         return 1;
     case effGetProductString:
-        if (ptr) strcpy((char *)ptr, "NegativeDelay");
+        if (ptr) strcpy((char *)ptr, "NegativeDelay16");
         return 1;
     case effGetVendorVersion:
         return 100;
@@ -146,7 +154,7 @@ static VstIntPtr dispatcher(AEffect *e, VstInt32 op, VstInt32 idx, VstIntPtr val
     case effIdentify:
         return kEffectIdentify;
     case effGetTailSize:
-        return p->delaySamples > 0 ? p->delaySamples : 0;
+        return p->baseline;
     case effCanDo:
         return -1;
     }
@@ -154,15 +162,20 @@ static VstIntPtr dispatcher(AEffect *e, VstInt32 op, VstInt32 idx, VstIntPtr val
 }
 
 static void setParameter(AEffect *e, VstInt32 idx, float v) {
-    (void)idx;
     Plug *p = (Plug *)e->object;
-    p->param = v;
-    p->delaySamples = calcDelay(p);
+    if (idx < 0 || idx >= NPAIRS) return;
+    p->param[idx] = v;
+    recompute(p);
+    if (e->initialDelay != p->baseline) {
+        e->initialDelay = p->baseline;
+        p->host(e, audioMasterIOChanged, 0, 0, NULL, 0);
+    }
 }
 
 static float getParameter(AEffect *e, VstInt32 idx) {
-    (void)idx;
-    return ((Plug *)e->object)->param;
+    Plug *p = (Plug *)e->object;
+    if (idx < 0 || idx >= NPAIRS) return 0;
+    return p->param[idx];
 }
 
 static void processReplacing(AEffect *e, float **in, float **out, VstInt32 n) {
@@ -177,6 +190,7 @@ static AEffect *initPlugin(audioMasterCallback host) {
     p->host = host;
     p->sampleRate = 44100.0f;
     p->blockSize = 512;
+    for (int i = 0; i < NPAIRS; i++) p->param[i] = (0.0f - DELAY_MIN_MS) / (DELAY_MAX_MS - DELAY_MIN_MS);
     AEffect *e = (AEffect *)calloc(1, sizeof(AEffect));
     if (!e) { free(p); return NULL; }
     e->magic = kEffectMagic;
@@ -186,13 +200,13 @@ static AEffect *initPlugin(audioMasterCallback host) {
     e->getParameter = getParameter;
     e->processReplacing = processReplacing;
     e->numPrograms = 1;
-    e->numParams = 1;
-    e->numInputs = 2;
-    e->numOutputs = 2;
+    e->numParams = NPAIRS;
+    e->numInputs = NCH;
+    e->numOutputs = NCH;
     e->flags = effFlagsCanReplacing;
-    e->uniqueID = CCONST('N', 'g', 'D', '1');
+    e->uniqueID = CCONST('N', 'g', 'D', '2');
     e->version = 100;
-    e->initialDelay = baselineSamples(p);
+    e->initialDelay = 0;
     return e;
 }
 
