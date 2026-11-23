@@ -63,7 +63,7 @@ int main() {
     AEffect *e = mainProc(hostProc);
     check("effect created", e && e->magic == kEffectMagic);
     check("32ch in/out", e->numInputs == NCH && e->numOutputs == NCH);
-    check("16 parameters", e->numParams == NPAIRS);
+    check("17 parameters", e->numParams == NPAIRS + 1);
 
     e->dispatcher(e, effOpen, 0, 0, NULL, 0);
     e->dispatcher(e, effSetSampleRate, 0, 0, NULL, 44100.0f);
@@ -84,6 +84,8 @@ int main() {
     int ok = 1;
     for (int i = 0; i < 256; i++) if (g_buf[0][32768 + i] != g_buf[0][i] || g_buf[1][32768 + i] != g_buf[1][i]) ok = 0;
     check("all-zero passthrough identity", ok);
+
+    e->setParameter(e, 16, 0.0f);
 
     g_ioChanged = 0;
     e->setParameter(e, 1, normParam(-500.0f));
@@ -120,6 +122,43 @@ int main() {
     check("P16=+100ms impulse at 26460", singleImpulse(30, 26460) && singleImpulse(31, 26460));
 
     check("initialDelay still 22050", e->initialDelay == 22050);
+
+    e->setParameter(e, 16, 1.0f);
+    check("merge re-enabled reads 1", e->getParameter(e, 16) == 1.0f);
+
+    zeroAll();
+    run(e, WINDOW);
+    impulseAtPair(0);
+    run(e, WINDOW);
+    ok = singleImpulse(0, 22050) && singleImpulse(1, 22050);
+    for (int c = 2; c < NCH; c++) if (!singleImpulse(c, -1)) ok = 0;
+    check("merge on: pair0 impulse to ch1/2, others silent", ok);
+
+    zeroAll();
+    run(e, WINDOW);
+    impulseAtPair(0);
+    g_buf[4][0] = 1.0f;
+    g_buf[5][0] = 1.0f;
+    run(e, WINDOW);
+    ok = 1;
+    for (int i = 0; i < WINDOW; i++) {
+        float *o = g_buf[0] + 32768;
+        float want = (i == 22050 || i == 17640) ? 1.0f : 0.0f;
+        if (o[i] != want) ok = 0;
+        float *o1 = g_buf[1] + 32768;
+        if (o1[i] != want) ok = 0;
+    }
+    check("merge on: pairs 0+2 sum into ch1/2", ok);
+
+    e->setParameter(e, 16, 0.0f);
+    zeroAll();
+    run(e, WINDOW);
+    impulseAtPair(2);
+    run(e, WINDOW);
+    ok = singleImpulse(4, 17640) && singleImpulse(5, 17640) && singleImpulse(0, -1) && singleImpulse(1, -1);
+    check("merge off: per-pair outputs restored", ok);
+
+    check("merge param reads 0", e->getParameter(e, 16) == 0.0f);
 
     float saved = e->getParameter(e, 15);
     check("getParameter roundtrip", fabsf(saved - normParam(100.0f)) < 1e-6f);

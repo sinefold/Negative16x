@@ -16,6 +16,7 @@ typedef struct {
     float param[NPAIRS];
     int   valueSamples[NPAIRS];
     int   baseline;
+    int   merge;
     int   delaySamples[NPAIRS];
     float *buf[NCH];
     int   bufCap;
@@ -92,6 +93,15 @@ static void process(Plug *p, float **in, float **out, VstInt32 n) {
     }
     p->wPos += (int)n;
     if (p->wPos >= p->bufCap) p->wPos -= p->bufCap;
+    if (p->merge) {
+        for (VstInt32 i = 0; i < n; i++) {
+            float l = out[0][i], r = out[1][i];
+            for (int c = 2; c < NCH; c += 2) { l += out[c][i]; r += out[c+1][i]; }
+            out[0][i] = l;
+            out[1][i] = r;
+        }
+        for (int c = 2; c < NCH; c++) memset(out[c], 0, (size_t)n * sizeof(float));
+    }
 }
 
 static VstIntPtr dispatcher(AEffect *e, VstInt32 op, VstInt32 idx, VstIntPtr val, void *ptr, float opt) {
@@ -128,14 +138,24 @@ static VstIntPtr dispatcher(AEffect *e, VstInt32 op, VstInt32 idx, VstIntPtr val
         }
         return 1;
     case effGetParamLabel:
-        if (ptr) strcpy((char *)ptr, "ms");
+        if (ptr) strcpy((char *)ptr, idx == NPAIRS ? "" : "ms");
         return 1;
     case effGetParamDisplay:
+        if (ptr && idx == NPAIRS) { strcpy((char *)ptr, ((Plug *)e->object)->merge ? "on" : "off"); return 1; }
         if (ptr && idx >= 0 && idx < NPAIRS) sprintf((char *)ptr, "%.2f", pairMs(p, idx));
         return 1;
     case effGetParamName:
+        if (ptr && idx == NPAIRS) { strcpy((char *)ptr, "Merge"); return 1; }
         if (ptr && idx >= 0 && idx < NPAIRS) sprintf((char *)ptr, "P%d", idx + 1);
         return 1;
+    case effGetParameterProperties:
+        if (idx == NPAIRS && ptr) {
+            VstParameterProperties *pp = (VstParameterProperties *)ptr;
+            memset(pp, 0, sizeof(*pp));
+            pp->flags = kVstParameterIsSwitch;
+            return 1;
+        }
+        return 0;
     case effGetEffectName:
         if (ptr) strcpy((char *)ptr, "NegativeDelay16");
         return 1;
@@ -163,6 +183,7 @@ static VstIntPtr dispatcher(AEffect *e, VstInt32 op, VstInt32 idx, VstIntPtr val
 
 static void setParameter(AEffect *e, VstInt32 idx, float v) {
     Plug *p = (Plug *)e->object;
+    if (idx == NPAIRS) { p->merge = v >= 0.5f ? 1 : 0; return; }
     if (idx < 0 || idx >= NPAIRS) return;
     p->param[idx] = v;
     recompute(p);
@@ -174,6 +195,7 @@ static void setParameter(AEffect *e, VstInt32 idx, float v) {
 
 static float getParameter(AEffect *e, VstInt32 idx) {
     Plug *p = (Plug *)e->object;
+    if (idx == NPAIRS) return (float)p->merge;
     if (idx < 0 || idx >= NPAIRS) return 0;
     return p->param[idx];
 }
@@ -191,6 +213,7 @@ static AEffect *initPlugin(audioMasterCallback host) {
     p->sampleRate = 44100.0f;
     p->blockSize = 512;
     for (int i = 0; i < NPAIRS; i++) p->param[i] = (0.0f - DELAY_MIN_MS) / (DELAY_MAX_MS - DELAY_MIN_MS);
+    p->merge = 1;
     AEffect *e = (AEffect *)calloc(1, sizeof(AEffect));
     if (!e) { free(p); return NULL; }
     e->magic = kEffectMagic;
@@ -200,7 +223,7 @@ static AEffect *initPlugin(audioMasterCallback host) {
     e->getParameter = getParameter;
     e->processReplacing = processReplacing;
     e->numPrograms = 1;
-    e->numParams = NPAIRS;
+    e->numParams = NPAIRS + 1;
     e->numInputs = NCH;
     e->numOutputs = NCH;
     e->flags = effFlagsCanReplacing;
