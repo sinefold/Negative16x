@@ -5,6 +5,7 @@
 
 #define DELAY_MIN_MS   (-500.0f)
 #define DELAY_MAX_MS   100.0f
+#define BASELINE_MS    500.0f
 
 typedef struct {
     audioMasterCallback host;
@@ -18,9 +19,13 @@ typedef struct {
 } Plug;
 
 static int calcDelay(const Plug *p) {
-    float ms = DELAY_MIN_MS + p->param * (DELAY_MAX_MS - DELAY_MIN_MS);
-    int d = (int)(ms * p->sampleRate * 0.001f + (ms >= 0 ? 0.5f : -0.5f));
-    return d;
+    float ms = BASELINE_MS + DELAY_MIN_MS + p->param * (DELAY_MAX_MS - DELAY_MIN_MS);
+    int d = (int)(ms * p->sampleRate * 0.001f + 0.5f);
+    return d > 0 ? d : 0;
+}
+
+static int baselineSamples(const Plug *p) {
+    return (int)(BASELINE_MS * p->sampleRate * 0.001f + 0.5f);
 }
 
 static void freeBuf(Plug *p) {
@@ -30,7 +35,7 @@ static void freeBuf(Plug *p) {
 }
 
 static int ensureBuf(Plug *p) {
-    int maxPos = (int)(DELAY_MAX_MS * p->sampleRate * 0.001f) + 1;
+    int maxPos = (int)((BASELINE_MS + DELAY_MAX_MS) * p->sampleRate * 0.001f) + 1;
     int need = maxPos + p->blockSize;
     if (p->bufCap >= need && p->buf[0]) return 1;
     float *l = (float *)realloc(p->buf[0], (size_t)need * sizeof(float));
@@ -89,7 +94,7 @@ static VstIntPtr dispatcher(AEffect *e, VstInt32 op, VstInt32 idx, VstIntPtr val
     case effOpen:
         p->sampleRate = 44100.0f;
         p->blockSize = 512;
-        e->initialDelay = calcDelay(p);
+        e->initialDelay = baselineSamples(p);
         return 1;
     case effClose:
         freeBuf(p);
@@ -99,7 +104,7 @@ static VstIntPtr dispatcher(AEffect *e, VstInt32 op, VstInt32 idx, VstIntPtr val
     case effSetSampleRate:
         p->sampleRate = opt > 0 ? opt : 44100.0f;
         p->delaySamples = calcDelay(p);
-        e->initialDelay = p->delaySamples;
+        e->initialDelay = baselineSamples(p);
         ensureBuf(p);
         return 1;
     case effSetBlockSize:
@@ -109,7 +114,6 @@ static VstIntPtr dispatcher(AEffect *e, VstInt32 op, VstInt32 idx, VstIntPtr val
     case effMainsChanged:
         if (val) {
             p->delaySamples = calcDelay(p);
-            e->initialDelay = p->delaySamples;
             if (!ensureBuf(p)) return 0;
         } else {
             p->wPos = 0;
@@ -154,8 +158,6 @@ static void setParameter(AEffect *e, VstInt32 idx, float v) {
     Plug *p = (Plug *)e->object;
     p->param = v;
     p->delaySamples = calcDelay(p);
-    e->initialDelay = p->delaySamples;
-    p->host(e, audioMasterIOChanged, 0, 0, NULL, 0);
 }
 
 static float getParameter(AEffect *e, VstInt32 idx) {
@@ -190,7 +192,7 @@ static AEffect *initPlugin(audioMasterCallback host) {
     e->flags = effFlagsCanReplacing;
     e->uniqueID = CCONST('N', 'g', 'D', '1');
     e->version = 100;
-    e->initialDelay = 0;
+    e->initialDelay = baselineSamples(p);
     return e;
 }
 
