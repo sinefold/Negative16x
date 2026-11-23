@@ -1,4 +1,5 @@
 #include "vst2.h"
+#include "presets.h"
 #include <windows.h>
 #include <stdio.h>
 #include <math.h>
@@ -160,12 +161,43 @@ int main() {
 
     check("merge param reads 0", e->getParameter(e, 16) == 0.0f);
 
+    check("program count", e->numPrograms == kNDPresetCount + 1);
+
+    char progname[64] = {0};
+    e->dispatcher(e, effGetProgramNameIndexed, 1, 0, progname, 0);
+    check("program 1 name from preset table", strcmp(progname, kNDPresets[0].name) == 0);
+
+    e->dispatcher(e, effSetProgram, 0, 1, NULL, 0);
+    ok = 1;
+    for (int i = 0; i < NPAIRS; i++) {
+        float want = (kNDPresets[0].ms[i] + 500.0f) / 600.0f;
+        if (fabsf(e->getParameter(e, i) - want) > 1e-4f) ok = 0;
+    }
+    check("program 1 applies all 16 pair values", ok);
+
+    int worstMs = 0;
+    for (int i = 0; i < NPAIRS; i++) { int v = (int)kNDPresets[0].ms[i]; if (v < worstMs) worstMs = v; }
+    check("program 1 sets baseline PDC", e->initialDelay == (int)(-worstMs * 44100.0f / 1000.0f + 0.5f));
+
+    char artname[64] = {0};
+    e->dispatcher(e, effGetParamName, 0, 0, artname, 0);
+    check("slider 1 shows articulation name", kNDPresets[0].names[0] && strcmp(artname, kNDPresets[0].names[0]) == 0);
+
+    e->dispatcher(e, effSetProgram, 0, 0, NULL, 0);
+    ok = 1;
+    for (int i = 0; i < NPAIRS; i++) if (fabsf(e->getParameter(e, i) - 0.833333f) > 1e-4f) ok = 0;
+    check("program 0 resets to zero delay", ok);
+
+    char pname2[64] = {0};
+    e->dispatcher(e, effGetParamName, 0, 0, pname2, 0);
+    check("program 0 sliders revert to P1..P16", strcmp(pname2, "P1") == 0);
+
     float saved = e->getParameter(e, 15);
-    check("getParameter roundtrip", fabsf(saved - normParam(100.0f)) < 1e-6f);
+    check("getParameter roundtrip", fabsf(saved - (kNDPresets[0].ms[15] + 500.0f) / 600.0f) < 1e-4f);
 
     char disp[64] = {0};
     e->dispatcher(e, effGetParamDisplay, 15, 0, disp, 0);
-    printf("  param 16 display at +100ms: '%s'\n", disp);
+    printf("  param 16 display: '%s'\n", disp);
     e->dispatcher(e, effMainsChanged, 0, 0, NULL, 0);
     e->dispatcher(e, effClose, 0, 0, NULL, 0);
     FreeLibrary(h);

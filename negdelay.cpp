@@ -1,4 +1,5 @@
 #include "vst2.h"
+#include "presets.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -17,6 +18,7 @@ typedef struct {
     int   valueSamples[NPAIRS];
     int   baseline;
     int   merge;
+    int   curProgram;
     int   delaySamples[NPAIRS];
     float *buf[NCH];
     int   bufCap;
@@ -104,9 +106,44 @@ static void process(Plug *p, float **in, float **out, VstInt32 n) {
     }
 }
 
+static float normFromMs(float ms) {
+    return (ms - DELAY_MIN_MS) / (DELAY_MAX_MS - DELAY_MIN_MS);
+}
+
+static void applyProgram(AEffect *e, int idx) {
+    Plug *p = (Plug *)e->object;
+    p->curProgram = idx;
+    if (idx <= 0 || idx > kNDPresetCount) {
+        for (int i = 0; i < NPAIRS; i++) p->param[i] = normFromMs(0.0f);
+    } else {
+        const NDPreset *pr = &kNDPresets[idx - 1];
+        for (int i = 0; i < NPAIRS; i++) p->param[i] = normFromMs(pr->ms[i]);
+    }
+    recompute(p);
+    if (e->initialDelay != p->baseline) {
+        e->initialDelay = p->baseline;
+        p->host(e, audioMasterIOChanged, 0, 0, NULL, 0);
+    }
+}
+
 static VstIntPtr dispatcher(AEffect *e, VstInt32 op, VstInt32 idx, VstIntPtr val, void *ptr, float opt) {
     Plug *p = (Plug *)e->object;
     switch (op) {
+    case effSetProgram:
+        applyProgram(e, (int)val);
+        return 1;
+    case effGetProgram:
+        return p->curProgram;
+    case effGetProgramName:
+        if (ptr) {
+            if (p->curProgram >= 1 && p->curProgram <= kNDPresetCount) strcpy((char *)ptr, kNDPresets[p->curProgram - 1].name);
+            else strcpy((char *)ptr, "Init");
+        }
+        return 1;
+    case effGetProgramNameIndexed:
+        if (ptr && idx >= 1 && idx <= kNDPresetCount) strcpy((char *)ptr, kNDPresets[idx - 1].name);
+        else if (ptr) strcpy((char *)ptr, "Init");
+        return 1;
     case effOpen:
         p->sampleRate = 44100.0f;
         p->blockSize = 512;
@@ -146,7 +183,16 @@ static VstIntPtr dispatcher(AEffect *e, VstInt32 op, VstInt32 idx, VstIntPtr val
         return 1;
     case effGetParamName:
         if (ptr && idx == NPAIRS) { strcpy((char *)ptr, "Merge"); return 1; }
-        if (ptr && idx >= 0 && idx < NPAIRS) sprintf((char *)ptr, "P%d", idx + 1);
+        if (ptr && idx >= 0 && idx < NPAIRS) {
+            const char *n = NULL;
+            if (p->curProgram >= 1 && p->curProgram <= kNDPresetCount) n = kNDPresets[p->curProgram - 1].names[idx];
+            if (n) {
+                strncpy((char *)ptr, n, 63);
+                ((char *)ptr)[63] = '\0';
+            } else {
+                sprintf((char *)ptr, "P%d", idx + 1);
+            }
+        }
         return 1;
     case effGetParameterProperties:
         if (idx == NPAIRS && ptr) {
@@ -222,7 +268,7 @@ static AEffect *initPlugin(audioMasterCallback host) {
     e->setParameter = setParameter;
     e->getParameter = getParameter;
     e->processReplacing = processReplacing;
-    e->numPrograms = 1;
+    e->numPrograms = kNDPresetCount + 1;
     e->numParams = NPAIRS + 1;
     e->numInputs = NCH;
     e->numOutputs = NCH;
