@@ -1,0 +1,3 @@
+EXPORTS
+VSTPluginMain @1
+main = main_plugin @2
