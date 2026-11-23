@@ -81,132 +81,149 @@ dlen15 = B + d15;
 
 @sample
 w = wpos;
-mem[w] = spl0;
-mem[w+1] = spl1;
-r = w - dlen0*2;
-r < 0 ? r += SEG;
-spl0 = mem[r];
-spl1 = mem[r+1];
-
+dlen0 == 0 ? (0) : (
+  mem[w] = spl0;
+  mem[w+1] = spl1;
+  r = w - dlen0*2;
+  r < 0 ? r += SEG;
+  spl0 = mem[r];
+  spl1 = mem[r+1];
+);
 w += SEG;
-mem[w] = spl2;
-mem[w+1] = spl3;
-r = w - dlen1*2;
-r < SEG ? r += SEG;
-spl2 = mem[r];
-spl3 = mem[r+1];
-
+dlen1 == 0 ? (0) : (
+  mem[w] = spl2;
+  mem[w+1] = spl3;
+  r = w - dlen1*2;
+  r < SEG ? r += SEG;
+  spl2 = mem[r];
+  spl3 = mem[r+1];
+);
 w += SEG;
-mem[w] = spl4;
-mem[w+1] = spl5;
-r = w - dlen2*2;
-r < SEG*2 ? r += SEG;
-spl4 = mem[r];
-spl5 = mem[r+1];
-
+dlen2 == 0 ? (0) : (
+  mem[w] = spl4;
+  mem[w+1] = spl5;
+  r = w - dlen2*2;
+  r < SEG*2 ? r += SEG;
+  spl4 = mem[r];
+  spl5 = mem[r+1];
+);
 w += SEG;
-mem[w] = spl6;
-mem[w+1] = spl7;
-r = w - dlen3*2;
-r < SEG*3 ? r += SEG;
-spl6 = mem[r];
-spl7 = mem[r+1];
-
+dlen3 == 0 ? (0) : (
+  mem[w] = spl6;
+  mem[w+1] = spl7;
+  r = w - dlen3*2;
+  r < SEG*3 ? r += SEG;
+  spl6 = mem[r];
+  spl7 = mem[r+1];
+);
 w += SEG;
-mem[w] = spl8;
-mem[w+1] = spl9;
-r = w - dlen4*2;
-r < SEG*4 ? r += SEG;
-spl8 = mem[r];
-spl9 = mem[r+1];
-
+dlen4 == 0 ? (0) : (
+  mem[w] = spl8;
+  mem[w+1] = spl9;
+  r = w - dlen4*2;
+  r < SEG*4 ? r += SEG;
+  spl8 = mem[r];
+  spl9 = mem[r+1];
+);
 w += SEG;
-mem[w] = spl10;
-mem[w+1] = spl11;
-r = w - dlen5*2;
-r < SEG*5 ? r += SEG;
-spl10 = mem[r];
-spl11 = mem[r+1];
-
+dlen5 == 0 ? (0) : (
+  mem[w] = spl10;
+  mem[w+1] = spl11;
+  r = w - dlen5*2;
+  r < SEG*5 ? r += SEG;
+  spl10 = mem[r];
+  spl11 = mem[r+1];
+);
 w += SEG;
-mem[w] = spl12;
-mem[w+1] = spl13;
-r = w - dlen6*2;
-r < SEG*6 ? r += SEG;
-spl12 = mem[r];
-spl13 = mem[r+1];
-
+dlen6 == 0 ? (0) : (
+  mem[w] = spl12;
+  mem[w+1] = spl13;
+  r = w - dlen6*2;
+  r < SEG*6 ? r += SEG;
+  spl12 = mem[r];
+  spl13 = mem[r+1];
+);
 w += SEG;
-mem[w] = spl14;
-mem[w+1] = spl15;
-r = w - dlen7*2;
-r < SEG*7 ? r += SEG;
-spl14 = mem[r];
-spl15 = mem[r+1];
-
+dlen7 == 0 ? (0) : (
+  mem[w] = spl14;
+  mem[w+1] = spl15;
+  r = w - dlen7*2;
+  r < SEG*7 ? r += SEG;
+  spl14 = mem[r];
+  spl15 = mem[r+1];
+);
 w += SEG;
-mem[w] = spl16;
-mem[w+1] = spl17;
-r = w - dlen8*2;
-r < SEG*8 ? r += SEG;
-spl16 = mem[r];
-spl17 = mem[r+1];
-
+dlen8 == 0 ? (0) : (
+  mem[w] = spl16;
+  mem[w+1] = spl17;
+  r = w - dlen8*2;
+  r < SEG*8 ? r += SEG;
+  spl16 = mem[r];
+  spl17 = mem[r+1];
+);
 w += SEG;
-mem[w] = spl18;
-mem[w+1] = spl19;
-r = w - dlen9*2;
-r < SEG*9 ? r += SEG;
-spl18 = mem[r];
-spl19 = mem[r+1];
-
+dlen9 == 0 ? (0) : (
+  mem[w] = spl18;
+  mem[w+1] = spl19;
+  r = w - dlen9*2;
+  r < SEG*9 ? r += SEG;
+  spl18 = mem[r];
+  spl19 = mem[r+1];
+);
 w += SEG;
-mem[w] = spl20;
-mem[w+1] = spl21;
-r = w - dlen10*2;
-r < SEG*10 ? r += SEG;
-spl20 = mem[r];
-spl21 = mem[r+1];
-
+dlen10 == 0 ? (0) : (
+  mem[w] = spl20;
+  mem[w+1] = spl21;
+  r = w - dlen10*2;
+  r < SEG*10 ? r += SEG;
+  spl20 = mem[r];
+  spl21 = mem[r+1];
+);
 w += SEG;
-mem[w] = spl22;
-mem[w+1] = spl23;
-r = w - dlen11*2;
-r < SEG*11 ? r += SEG;
-spl22 = mem[r];
-spl23 = mem[r+1];
-
+dlen11 == 0 ? (0) : (
+  mem[w] = spl22;
+  mem[w+1] = spl23;
+  r = w - dlen11*2;
+  r < SEG*11 ? r += SEG;
+  spl22 = mem[r];
+  spl23 = mem[r+1];
+);
 w += SEG;
-mem[w] = spl24;
-mem[w+1] = spl25;
-r = w - dlen12*2;
-r < SEG*12 ? r += SEG;
-spl24 = mem[r];
-spl25 = mem[r+1];
-
+dlen12 == 0 ? (0) : (
+  mem[w] = spl24;
+  mem[w+1] = spl25;
+  r = w - dlen12*2;
+  r < SEG*12 ? r += SEG;
+  spl24 = mem[r];
+  spl25 = mem[r+1];
+);
 w += SEG;
-mem[w] = spl26;
-mem[w+1] = spl27;
-r = w - dlen13*2;
-r < SEG*13 ? r += SEG;
-spl26 = mem[r];
-spl27 = mem[r+1];
-
+dlen13 == 0 ? (0) : (
+  mem[w] = spl26;
+  mem[w+1] = spl27;
+  r = w - dlen13*2;
+  r < SEG*13 ? r += SEG;
+  spl26 = mem[r];
+  spl27 = mem[r+1];
+);
 w += SEG;
-mem[w] = spl28;
-mem[w+1] = spl29;
-r = w - dlen14*2;
-r < SEG*14 ? r += SEG;
-spl28 = mem[r];
-spl29 = mem[r+1];
-
+dlen14 == 0 ? (0) : (
+  mem[w] = spl28;
+  mem[w+1] = spl29;
+  r = w - dlen14*2;
+  r < SEG*14 ? r += SEG;
+  spl28 = mem[r];
+  spl29 = mem[r+1];
+);
 w += SEG;
-mem[w] = spl30;
-mem[w+1] = spl31;
-r = w - dlen15*2;
-r < SEG*15 ? r += SEG;
-spl30 = mem[r];
-spl31 = mem[r+1];
+dlen15 == 0 ? (0) : (
+  mem[w] = spl30;
+  mem[w+1] = spl31;
+  r = w - dlen15*2;
+  r < SEG*15 ? r += SEG;
+  spl30 = mem[r];
+  spl31 = mem[r+1];
+);
 
 wpos += 2;
 wpos >= SEG ? wpos = 0;
