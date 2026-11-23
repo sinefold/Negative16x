@@ -1,0 +1,30 @@
+desc:Negative Delay (minimal)
+//tags: delay time PDC negative
+//author: paul
+
+slider1:0<-500,100,1>Delay (ms)
+
+@init
+bufsize = (srate/10 + 1024)|0;
+bpos = 0;
+
+@slider
+delaylen = (slider1*srate*0.001)|0;
+delaylen < 0 ? (
+  pdc_delay = -delaylen;
+  pdc_top_ch = 2;
+  pdc_bot_ch = 0;
+  delaylen = 0;
+) : pdc_delay = 0;
+
+@sample
+bpos[0] = spl0;
+bpos[1] = spl1;
+delaylen ? (
+  rdpos = bpos - delaylen*2;
+  rdpos < 0 ? rdpos += bufsize*2;
+  spl0 = rdpos[0];
+  spl1 = rdpos[1];
+);
+bpos += 2;
+bpos >= bufsize*2 ? bpos = 0;
