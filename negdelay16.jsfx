@@ -1,0 +1,212 @@
+desc:Negative Delay 16x
+desc:16 stereo pairs, per-pair delay, PDC = most negative pair
+//tags: delay time PDC negative
+//author: paul
+
+slider1:0<-500,100,1>P1 (ms)
+slider2:0<-500,100,1>P2 (ms)
+slider3:0<-500,100,1>P3 (ms)
+slider4:0<-500,100,1>P4 (ms)
+slider5:0<-500,100,1>P5 (ms)
+slider6:0<-500,100,1>P6 (ms)
+slider7:0<-500,100,1>P7 (ms)
+slider8:0<-500,100,1>P8 (ms)
+slider9:0<-500,100,1>P9 (ms)
+slider10:0<-500,100,1>P10 (ms)
+slider11:0<-500,100,1>P11 (ms)
+slider12:0<-500,100,1>P12 (ms)
+slider13:0<-500,100,1>P13 (ms)
+slider14:0<-500,100,1>P14 (ms)
+slider15:0<-500,100,1>P15 (ms)
+slider16:0<-500,100,1>P16 (ms)
+
+@init
+bufsize = ((srate*0.6)|0) + 1024;
+SEG = bufsize*2;
+wpos = 0;
+
+@slider
+d0 = (slider1*srate*0.001)|0;
+d1 = (slider2*srate*0.001)|0;
+d2 = (slider3*srate*0.001)|0;
+d3 = (slider4*srate*0.001)|0;
+d4 = (slider5*srate*0.001)|0;
+d5 = (slider6*srate*0.001)|0;
+d6 = (slider7*srate*0.001)|0;
+d7 = (slider8*srate*0.001)|0;
+d8 = (slider9*srate*0.001)|0;
+d9 = (slider10*srate*0.001)|0;
+d10 = (slider11*srate*0.001)|0;
+d11 = (slider12*srate*0.001)|0;
+d12 = (slider13*srate*0.001)|0;
+d13 = (slider14*srate*0.001)|0;
+d14 = (slider15*srate*0.001)|0;
+d15 = (slider16*srate*0.001)|0;
+B = 0;
+B < -d0 ? B = -d0;
+B < -d1 ? B = -d1;
+B < -d2 ? B = -d2;
+B < -d3 ? B = -d3;
+B < -d4 ? B = -d4;
+B < -d5 ? B = -d5;
+B < -d6 ? B = -d6;
+B < -d7 ? B = -d7;
+B < -d8 ? B = -d8;
+B < -d9 ? B = -d9;
+B < -d10 ? B = -d10;
+B < -d11 ? B = -d11;
+B < -d12 ? B = -d12;
+B < -d13 ? B = -d13;
+B < -d14 ? B = -d14;
+B < -d15 ? B = -d15;
+pdc_delay = -B;
+pdc_bot_ch = 0;
+pdc_top_ch = 32;
+dlen0 = B + d0;
+dlen1 = B + d1;
+dlen2 = B + d2;
+dlen3 = B + d3;
+dlen4 = B + d4;
+dlen5 = B + d5;
+dlen6 = B + d6;
+dlen7 = B + d7;
+dlen8 = B + d8;
+dlen9 = B + d9;
+dlen10 = B + d10;
+dlen11 = B + d11;
+dlen12 = B + d12;
+dlen13 = B + d13;
+dlen14 = B + d14;
+dlen15 = B + d15;
+
+@sample
+w = wpos;
+mem[w] = spl0;
+mem[w+1] = spl1;
+r = w - dlen0*2;
+r < 0 ? r += SEG;
+spl0 = mem[r];
+spl1 = mem[r+1];
+
+w += SEG;
+mem[w] = spl2;
+mem[w+1] = spl3;
+r = w - dlen1*2;
+r < SEG ? r += SEG;
+spl2 = mem[r];
+spl3 = mem[r+1];
+
+w += SEG;
+mem[w] = spl4;
+mem[w+1] = spl5;
+r = w - dlen2*2;
+r < SEG*2 ? r += SEG;
+spl4 = mem[r];
+spl5 = mem[r+1];
+
+w += SEG;
+mem[w] = spl6;
+mem[w+1] = spl7;
+r = w - dlen3*2;
+r < SEG*3 ? r += SEG;
+spl6 = mem[r];
+spl7 = mem[r+1];
+
+w += SEG;
+mem[w] = spl8;
+mem[w+1] = spl9;
+r = w - dlen4*2;
+r < SEG*4 ? r += SEG;
+spl8 = mem[r];
+spl9 = mem[r+1];
+
+w += SEG;
+mem[w] = spl10;
+mem[w+1] = spl11;
+r = w - dlen5*2;
+r < SEG*5 ? r += SEG;
+spl10 = mem[r];
+spl11 = mem[r+1];
+
+w += SEG;
+mem[w] = spl12;
+mem[w+1] = spl13;
+r = w - dlen6*2;
+r < SEG*6 ? r += SEG;
+spl12 = mem[r];
+spl13 = mem[r+1];
+
+w += SEG;
+mem[w] = spl14;
+mem[w+1] = spl15;
+r = w - dlen7*2;
+r < SEG*7 ? r += SEG;
+spl14 = mem[r];
+spl15 = mem[r+1];
+
+w += SEG;
+mem[w] = spl16;
+mem[w+1] = spl17;
+r = w - dlen8*2;
+r < SEG*8 ? r += SEG;
+spl16 = mem[r];
+spl17 = mem[r+1];
+
+w += SEG;
+mem[w] = spl18;
+mem[w+1] = spl19;
+r = w - dlen9*2;
+r < SEG*9 ? r += SEG;
+spl18 = mem[r];
+spl19 = mem[r+1];
+
+w += SEG;
+mem[w] = spl20;
+mem[w+1] = spl21;
+r = w - dlen10*2;
+r < SEG*10 ? r += SEG;
+spl20 = mem[r];
+spl21 = mem[r+1];
+
+w += SEG;
+mem[w] = spl22;
+mem[w+1] = spl23;
+r = w - dlen11*2;
+r < SEG*11 ? r += SEG;
+spl22 = mem[r];
+spl23 = mem[r+1];
+
+w += SEG;
+mem[w] = spl24;
+mem[w+1] = spl25;
+r = w - dlen12*2;
+r < SEG*12 ? r += SEG;
+spl24 = mem[r];
+spl25 = mem[r+1];
+
+w += SEG;
+mem[w] = spl26;
+mem[w+1] = spl27;
+r = w - dlen13*2;
+r < SEG*13 ? r += SEG;
+spl26 = mem[r];
+spl27 = mem[r+1];
+
+w += SEG;
+mem[w] = spl28;
+mem[w+1] = spl29;
+r = w - dlen14*2;
+r < SEG*14 ? r += SEG;
+spl28 = mem[r];
+spl29 = mem[r+1];
+
+w += SEG;
+mem[w] = spl30;
+mem[w+1] = spl31;
+r = w - dlen15*2;
+r < SEG*15 ? r += SEG;
+spl30 = mem[r];
+spl31 = mem[r+1];
+
+wpos += 2;
+wpos >= SEG ? wpos = 0;
