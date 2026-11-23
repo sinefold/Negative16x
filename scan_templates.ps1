@@ -48,7 +48,7 @@ Get-ChildItem $TemplateDir -Recurse -Filter *.RTrackTemplate | Sort-Object Name 
     foreach ($st in ($tracks | Where-Object sine)) {
         $artics = @()
         foreach ($at in ($tracks | Where-Object hasJs)) {
-            $r = @($at.recv | Where-Object { $_.src -eq $st.ord }) | Select-Object -First 1
+            $r = @($at.recv | Where-Object { $_.src -eq ($st.ord - 1) }) | Select-Object -First 1
             if ($null -ne $r) {
                 $artics += [pscustomobject]@{
                     name       = $at.name
