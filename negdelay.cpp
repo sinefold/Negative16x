@@ -12,12 +12,19 @@
 
 typedef struct {
     audioMasterCallback host;
+    AEffect *self;
     float sampleRate;
     int   blockSize;
     float param[NPAIRS];
     int   valueSamples[NPAIRS];
     int   baseline;
     int   merge;
+    int   armBypass;
+    int   armed;
+    int   reaperReady;
+    void  *track;
+    const char *(*getSetTrackInfo)(void *, const char *, void *);
+    int   pollCountdown;
     int   curProgram;
     int   delaySamples[NPAIRS];
     float *buf[NCH];
@@ -31,9 +38,10 @@ static float pairMs(const Plug *p, int i) {
 
 static void recompute(Plug *p) {
     int B = 0;
+    int zero = p->armBypass && p->armed;
     for (int i = 0; i < NPAIRS; i++) {
         float ms = pairMs(p, i);
-        int v = (int)(ms * p->sampleRate * 0.001f + (ms >= 0 ? 0.5f : -0.5f));
+        int v = zero ? 0 : (int)(ms * p->sampleRate * 0.001f + (ms >= 0 ? 0.5f : -0.5f));
         p->valueSamples[i] = v;
         if (-v > B) B = -v;
     }
@@ -63,7 +71,30 @@ static int ensureBuf(Plug *p) {
     return 1;
 }
 
+static void pollArmState(Plug *p) {
+    if (!p->armBypass) return;
+    if (--p->pollCountdown > 0) return;
+    p->pollCountdown = 16;
+    if (!p->reaperReady) {
+        p->reaperReady = 1;
+        p->track = (void *)p->host(p->self, 0xdeadbeef, 0xdeadf00e, 1, NULL, 0.0f);
+        VstIntPtr fn = p->host(NULL, 0xdeadbeef, 0xdeadf00d, 0, (void *)"GetSetMediaTrackInfo_Value", 0.0f);
+        if (fn) memcpy(&p->getSetTrackInfo, &fn, sizeof(fn));
+    }
+    if (!p->track || !p->getSetTrackInfo) return;
+    int armed = p->getSetTrackInfo(p->track, "I_RECARM", NULL) != NULL;
+    if (armed != p->armed) {
+        p->armed = armed;
+        recompute(p);
+        if (p->self->initialDelay != p->baseline) {
+            p->self->initialDelay = p->baseline;
+            p->host(p->self, audioMasterIOChanged, 0, 0, NULL, 0);
+        }
+    }
+}
+
 static void process(Plug *p, float **in, float **out, VstInt32 n) {
+    pollArmState(p);
     int cap = p->bufCap;
     for (int c = 0; c < NCH; c++) {
         int d = p->delaySamples[c >> 1];
@@ -175,14 +206,16 @@ static VstIntPtr dispatcher(AEffect *e, VstInt32 op, VstInt32 idx, VstIntPtr val
         }
         return 1;
     case effGetParamLabel:
-        if (ptr) strcpy((char *)ptr, idx == NPAIRS ? "" : "ms");
+        if (ptr) strcpy((char *)ptr, (idx == NPAIRS || idx == NPAIRS + 1) ? "" : "ms");
         return 1;
     case effGetParamDisplay:
         if (ptr && idx == NPAIRS) { strcpy((char *)ptr, ((Plug *)e->object)->merge ? "on" : "off"); return 1; }
+        if (ptr && idx == NPAIRS + 1) { strcpy((char *)ptr, ((Plug *)e->object)->armBypass ? "on" : "off"); return 1; }
         if (ptr && idx >= 0 && idx < NPAIRS) sprintf((char *)ptr, "%.2f", pairMs(p, idx));
         return 1;
     case effGetParamName:
         if (ptr && idx == NPAIRS) { strcpy((char *)ptr, "Merge"); return 1; }
+        if (ptr && idx == NPAIRS + 1) { strcpy((char *)ptr, "Arm bypass"); return 1; }
         if (ptr && idx >= 0 && idx < NPAIRS) {
             const char *n = NULL;
             if (p->curProgram >= 1 && p->curProgram <= kNDPresetCount) n = kNDPresets[p->curProgram - 1].names[idx];
@@ -195,7 +228,7 @@ static VstIntPtr dispatcher(AEffect *e, VstInt32 op, VstInt32 idx, VstIntPtr val
         }
         return 1;
     case effGetParameterProperties:
-        if (idx == NPAIRS && ptr) {
+        if ((idx == NPAIRS || idx == NPAIRS + 1) && ptr) {
             VstParameterProperties *pp = (VstParameterProperties *)ptr;
             memset(pp, 0, sizeof(*pp));
             pp->flags = kVstParameterIsSwitch;
@@ -222,6 +255,7 @@ static VstIntPtr dispatcher(AEffect *e, VstInt32 op, VstInt32 idx, VstIntPtr val
     case effGetTailSize:
         return p->baseline;
     case effCanDo:
+        if (ptr && strcmp((char *)ptr, "hasCockosExtensions") == 0) return (VstIntPtr)0xbeef0000;
         return -1;
     }
     return 0;
@@ -230,6 +264,7 @@ static VstIntPtr dispatcher(AEffect *e, VstInt32 op, VstInt32 idx, VstIntPtr val
 static void setParameter(AEffect *e, VstInt32 idx, float v) {
     Plug *p = (Plug *)e->object;
     if (idx == NPAIRS) { p->merge = v >= 0.5f ? 1 : 0; return; }
+    if (idx == NPAIRS + 1) { p->armBypass = v >= 0.5f ? 1 : 0; return; }
     if (idx < 0 || idx >= NPAIRS) return;
     p->param[idx] = v;
     recompute(p);
@@ -242,6 +277,7 @@ static void setParameter(AEffect *e, VstInt32 idx, float v) {
 static float getParameter(AEffect *e, VstInt32 idx) {
     Plug *p = (Plug *)e->object;
     if (idx == NPAIRS) return (float)p->merge;
+    if (idx == NPAIRS + 1) return (float)p->armBypass;
     if (idx < 0 || idx >= NPAIRS) return 0;
     return p->param[idx];
 }
@@ -260,6 +296,7 @@ static AEffect *initPlugin(audioMasterCallback host) {
     p->blockSize = 512;
     for (int i = 0; i < NPAIRS; i++) p->param[i] = (0.0f - DELAY_MIN_MS) / (DELAY_MAX_MS - DELAY_MIN_MS);
     p->merge = 1;
+    p->armBypass = 1;
     AEffect *e = (AEffect *)calloc(1, sizeof(AEffect));
     if (!e) { free(p); return NULL; }
     e->magic = kEffectMagic;
@@ -269,13 +306,14 @@ static AEffect *initPlugin(audioMasterCallback host) {
     e->getParameter = getParameter;
     e->processReplacing = processReplacing;
     e->numPrograms = kNDPresetCount + 1;
-    e->numParams = NPAIRS + 1;
+    e->numParams = NPAIRS + 2;
     e->numInputs = NCH;
     e->numOutputs = NCH;
     e->flags = effFlagsCanReplacing;
     e->uniqueID = CCONST('N', 'g', 'D', '2');
     e->version = 100;
     e->initialDelay = 0;
+    p->self = e;
     return e;
 }
 

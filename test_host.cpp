@@ -64,7 +64,7 @@ int main() {
     AEffect *e = mainProc(hostProc);
     check("effect created", e && e->magic == kEffectMagic);
     check("32ch in/out", e->numInputs == NCH && e->numOutputs == NCH);
-    check("17 parameters", e->numParams == NPAIRS + 1);
+    check("18 parameters", e->numParams == NPAIRS + 2);
 
     e->dispatcher(e, effOpen, 0, 0, NULL, 0);
     e->dispatcher(e, effSetSampleRate, 0, 0, NULL, 44100.0f);
@@ -160,6 +160,17 @@ int main() {
     check("merge off: per-pair outputs restored", ok);
 
     check("merge param reads 0", e->getParameter(e, 16) == 0.0f);
+
+    check("arm bypass default on", e->getParameter(e, 17) == 1.0f);
+    char abname[64] = {0};
+    e->dispatcher(e, effGetParamName, 17, 0, abname, 0);
+    check("param 18 named Arm bypass", strcmp(abname, "Arm bypass") == 0);
+    char abdisp[64] = {0};
+    e->dispatcher(e, effGetParamDisplay, 17, 0, abdisp, 0);
+    check("arm bypass display on", strcmp(abdisp, "on") == 0);
+    e->setParameter(e, 17, 0.0f);
+    check("arm bypass roundtrip", e->getParameter(e, 17) == 0.0f);
+    e->setParameter(e, 17, 1.0f);
 
     check("program count", e->numPrograms == kNDPresetCount + 1);
 
