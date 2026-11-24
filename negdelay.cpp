@@ -79,11 +79,12 @@ static void pollArmState(Plug *p) {
     if (!p->reaperReady) {
         p->reaperReady = 1;
         p->track = (void *)p->host(p->self, 0xdeadbeef, 0xdeadf00e, 1, NULL, 0.0f);
-        VstIntPtr fn = p->host(NULL, 0xdeadbeef, 0xdeadf00d, 0, (void *)"GetSetMediaTrackInfo_Value", 0.0f);
+        VstIntPtr fn = p->host(NULL, 0xdeadbeef, 0xdeadf00d, 0, (void *)"GetSetMediaTrackInfo", 0.0f);
         if (fn) memcpy(&p->getSetTrackInfo, &fn, sizeof(fn));
     }
     if (!p->track || !p->getSetTrackInfo) return;
-    int armed = p->getSetTrackInfo(p->track, "I_RECARM", NULL) != NULL;
+    const char *r = p->getSetTrackInfo(p->track, "I_RECARM", NULL);
+    int armed = r && *(const int *)r;
     if (armed != p->armed) {
         p->armed = armed;
         recompute(p);
