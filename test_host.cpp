@@ -64,7 +64,7 @@ int main() {
     AEffect *e = mainProc(hostProc);
     check("effect created", e && e->magic == kEffectMagic);
     check("32ch in/out", e->numInputs == NCH && e->numOutputs == NCH);
-    check("18 parameters", e->numParams == NPAIRS + 2);
+    check("19 parameters", e->numParams == NPAIRS + 3);
 
     e->dispatcher(e, effOpen, 0, 0, NULL, 0);
     e->dispatcher(e, effSetSampleRate, 0, 0, NULL, 44100.0f);
@@ -171,6 +171,20 @@ int main() {
     e->setParameter(e, 17, 0.0f);
     check("arm bypass roundtrip", e->getParameter(e, 17) == 0.0f);
     e->setParameter(e, 17, 1.0f);
+
+    char bpname[64] = {0};
+    e->dispatcher(e, effGetParamName, 18, 0, bpname, 0);
+    check("param 19 named Bypass", strcmp(bpname, "Bypass") == 0);
+    check("bypass default off", e->getParameter(e, 18) == 0.0f);
+    e->setParameter(e, 18, 1.0f);
+    check("bypass zeroes PDC while set", e->initialDelay == 0);
+    for (int i = 0; i < 256; i++) { g_buf[0][i] = (float)(i + 11); g_buf[1][i] = (float)(i + 13); }
+    run(e, 256);
+    int okb = 1;
+    for (int i = 0; i < 256; i++) if (g_buf[0][32768 + i] != g_buf[0][i] || g_buf[1][32768 + i] != g_buf[1][i]) okb = 0;
+    check("bypass on: passthrough identity", okb);
+    e->setParameter(e, 18, 0.0f);
+    check("bypass off restores baseline", e->initialDelay == 22050);
 
     check("program count", e->numPrograms == kNDPresetCount + 1);
 

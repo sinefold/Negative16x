@@ -20,6 +20,7 @@ typedef struct {
     int   baseline;
     int   merge;
     int   armBypass;
+    int   bypass;
     int   armed;
     int   reaperReady;
     void  *track;
@@ -38,7 +39,7 @@ static float pairMs(const Plug *p, int i) {
 
 static void recompute(Plug *p) {
     int B = 0;
-    int zero = p->armBypass && p->armed;
+    int zero = (p->armBypass && p->armed) || p->bypass;
     for (int i = 0; i < NPAIRS; i++) {
         float ms = pairMs(p, i);
         int v = zero ? 0 : (int)(ms * p->sampleRate * 0.001f + (ms >= 0 ? 0.5f : -0.5f));
@@ -206,16 +207,18 @@ static VstIntPtr dispatcher(AEffect *e, VstInt32 op, VstInt32 idx, VstIntPtr val
         }
         return 1;
     case effGetParamLabel:
-        if (ptr) strcpy((char *)ptr, (idx == NPAIRS || idx == NPAIRS + 1) ? "" : "ms");
+        if (ptr) strcpy((char *)ptr, (idx >= NPAIRS) ? "" : "ms");
         return 1;
     case effGetParamDisplay:
         if (ptr && idx == NPAIRS) { strcpy((char *)ptr, ((Plug *)e->object)->merge ? "on" : "off"); return 1; }
         if (ptr && idx == NPAIRS + 1) { strcpy((char *)ptr, ((Plug *)e->object)->armBypass ? "on" : "off"); return 1; }
+        if (ptr && idx == NPAIRS + 2) { strcpy((char *)ptr, ((Plug *)e->object)->bypass ? "on" : "off"); return 1; }
         if (ptr && idx >= 0 && idx < NPAIRS) sprintf((char *)ptr, "%.2f", pairMs(p, idx));
         return 1;
     case effGetParamName:
         if (ptr && idx == NPAIRS) { strcpy((char *)ptr, "Merge"); return 1; }
         if (ptr && idx == NPAIRS + 1) { strcpy((char *)ptr, "Arm bypass"); return 1; }
+        if (ptr && idx == NPAIRS + 2) { strcpy((char *)ptr, "Bypass"); return 1; }
         if (ptr && idx >= 0 && idx < NPAIRS) {
             const char *n = NULL;
             if (p->curProgram >= 1 && p->curProgram <= kNDPresetCount) n = kNDPresets[p->curProgram - 1].names[idx];
@@ -228,7 +231,7 @@ static VstIntPtr dispatcher(AEffect *e, VstInt32 op, VstInt32 idx, VstIntPtr val
         }
         return 1;
     case effGetParameterProperties:
-        if ((idx == NPAIRS || idx == NPAIRS + 1) && ptr) {
+        if (idx >= NPAIRS && idx <= NPAIRS + 2 && ptr) {
             VstParameterProperties *pp = (VstParameterProperties *)ptr;
             memset(pp, 0, sizeof(*pp));
             pp->flags = kVstParameterIsSwitch;
@@ -264,7 +267,16 @@ static VstIntPtr dispatcher(AEffect *e, VstInt32 op, VstInt32 idx, VstIntPtr val
 static void setParameter(AEffect *e, VstInt32 idx, float v) {
     Plug *p = (Plug *)e->object;
     if (idx == NPAIRS) { p->merge = v >= 0.5f ? 1 : 0; return; }
-    if (idx == NPAIRS + 1) { p->armBypass = v >= 0.5f ? 1 : 0; return; }
+    if (idx == NPAIRS + 1 || idx == NPAIRS + 2) {
+        if (idx == NPAIRS + 1) p->armBypass = v >= 0.5f ? 1 : 0;
+        else p->bypass = v >= 0.5f ? 1 : 0;
+        recompute(p);
+        if (e->initialDelay != p->baseline) {
+            e->initialDelay = p->baseline;
+            p->host(e, audioMasterIOChanged, 0, 0, NULL, 0);
+        }
+        return;
+    }
     if (idx < 0 || idx >= NPAIRS) return;
     p->param[idx] = v;
     recompute(p);
@@ -278,6 +290,7 @@ static float getParameter(AEffect *e, VstInt32 idx) {
     Plug *p = (Plug *)e->object;
     if (idx == NPAIRS) return (float)p->merge;
     if (idx == NPAIRS + 1) return (float)p->armBypass;
+    if (idx == NPAIRS + 2) return (float)p->bypass;
     if (idx < 0 || idx >= NPAIRS) return 0;
     return p->param[idx];
 }
@@ -306,7 +319,7 @@ static AEffect *initPlugin(audioMasterCallback host) {
     e->getParameter = getParameter;
     e->processReplacing = processReplacing;
     e->numPrograms = kNDPresetCount + 1;
-    e->numParams = NPAIRS + 2;
+    e->numParams = NPAIRS + 3;
     e->numInputs = NCH;
     e->numOutputs = NCH;
     e->flags = effFlagsCanReplacing;
